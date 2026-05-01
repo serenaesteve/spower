@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>SPOWER — Presentation Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{
+  --lime:#C8FF00; --pink:#FF2D78; --cyan:#00F5FF;
+  --purple:#9B00FF; --orange:#FF6B00;
+  --black:#0A0A0A; --panel:#111; --border:#222;
+  --white:#F0F0F0; --muted:#555;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--black);font-family:'Space Mono',monospace;cursor:default;}
+
+/* ── APP SHELL ── */
+#app{display:grid;grid-template-rows:56px 1fr;grid-template-columns:220px 1fr 260px;height:100vh;}
+
+/* ── TOPBAR ── */
+#topbar{
+  grid-column:1/-1;
+  background:var(--lime);
+  border-bottom:3px solid var(--black);
+  display:flex;align-items:center;gap:0;
+  padding:0;
+}
+.logo{
+  font-family:'Black Han Sans',sans-serif;font-size:22px;
+  color:var(--black);padding:0 20px;
+  display:flex;align-items:center;gap:4px;height:100%;
+  border-right:3px solid var(--black);
+}
+.logo em{font-style:normal;background:var(--pink);color:var(--white);padding:1px 8px;transform:skewX(-8deg);display:inline-block;}
+.tb-group{display:flex;align-items:center;height:100%;border-right:2px solid rgba(0,0,0,0.15);}
+.tb-btn{
+  height:100%;padding:0 14px;
+  background:transparent;border:none;cursor:pointer;
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+  color:var(--black);letter-spacing:.05em;text-transform:uppercase;
+  display:flex;align-items:center;gap:6px;
+  transition:background .15s;
+  white-space:nowrap;
+}
+.tb-btn:hover{background:rgba(0,0,0,0.1);}
+.tb-btn.accent{background:var(--pink);color:var(--white);}
+.tb-btn.accent:hover{background:#d4165e;}
+.tb-btn svg{flex-shrink:0;}
+.tb-spacer{flex:1;}
+.tb-title{
+  font-family:'Black Han Sans',sans-serif;font-size:13px;
+  color:var(--black);padding:0 16px;
+  letter-spacing:.05em;
+}
+
+/* ── SIDEBAR LEFT — slide list ── */
+#sidebar-left{
+  background:var(--panel);
+  border-right:2px solid var(--border);
+  overflow-y:auto;overflow-x:hidden;
+  display:flex;flex-direction:column;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+#sidebar-left::-webkit-scrollbar{width:4px;}
+#sidebar-left::-webkit-scrollbar-thumb{background:var(--border);}
+
+.slide-list-header{
+  padding:12px 14px 8px;
+  font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.slide-thumb{
+  margin:8px;border:2px solid var(--border);
+  border-radius:4px;cursor:pointer;
+  background:#1a1a1a;overflow:hidden;
+  transition:border-color .15s;
+  position:relative;flex-shrink:0;
+}
+.slide-thumb:hover{border-color:var(--muted);}
+.slide-thumb.active{border-color:var(--lime);}
+.slide-thumb-inner{
+  width:100%;aspect-ratio:16/9;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:10px;position:relative;overflow:hidden;
+}
+.slide-thumb-num{
+  position:absolute;bottom:4px;right:6px;
+  font-size:8px;color:var(--muted);
+}
+.slide-thumb-title{font-size:9px;font-family:'Black Han Sans',sans-serif;color:var(--white);line-height:1.2;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.slide-thumb-sub{font-size:7px;color:var(--muted);margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.slide-thumb .del-btn{
+  position:absolute;top:3px;right:3px;
+  background:var(--pink);border:none;color:white;
+  width:16px;height:16px;font-size:9px;cursor:pointer;
+  display:none;align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;
+}
+.slide-thumb:hover .del-btn{display:flex;}
+
+/* ── CANVAS AREA ── */
+#canvas-area{
+  background:#1a1a1a;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  overflow:hidden;
+  position:relative;
+}
+.canvas-label{
+  position:absolute;top:12px;left:16px;
+  font-size:9px;color:#333;letter-spacing:.15em;text-transform:uppercase;
+}
+
+#slide-canvas{
+  width:800px;height:450px;
+  position:relative;overflow:hidden;
+  box-shadow:0 0 0 3px var(--border), 0 20px 60px rgba(0,0,0,0.5);
+  flex-shrink:0;
+}
+
+/* ── SLIDE CONTENT ── */
+.slide-bg{position:absolute;inset:0;pointer-events:none;}
+.slide-grid-overlay{
+  position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+.slide-content{
+  position:relative;z-index:2;
+  width:100%;height:100%;
+  padding:52px 56px 40px;
+  display:flex;flex-direction:column;justify-content:center;
+}
+.slide-kicker{
+  font-family:'Space Mono',monospace;
+  font-size:8px;letter-spacing:.25em;text-transform:uppercase;
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;
+}
+.slide-kicker::before{content:'';width:14px;height:2px;display:inline-block;}
+.slide-h1{
+  font-family:'Black Han Sans',sans-serif;
+  line-height:.95;letter-spacing:-1px;margin-bottom:14px;
+}
+.slide-h2{
+  font-family:'Black Han Sans',sans-serif;
+  line-height:1;letter-spacing:-.5px;margin-bottom:14px;
+}
+.slide-p{font-size:12px;line-height:1.7;max-width:500px;}
+.slide-divider{width:32px;height:2px;margin-bottom:14px;}
+
+/* bullet list */
+.slide-ul{list-style:none;padding:0;max-width:580px;}
+.slide-ul li{
+  font-size:12px;font-family:'Space Mono',monospace;
+  border:1.5px solid #2a2a2a;
+  margin-bottom:7px;padding:10px 14px;
+  display:flex;align-items:center;gap:10px;
+}
+.slide-ul li::before{content:'▶';font-size:8px;flex-shrink:0;}
+
+/* quote */
+.slide-quote-mark{font-size:60px;line-height:1;margin-bottom:6px;opacity:.35;}
+.slide-blockquote{
+  font-family:'Black Han Sans',sans-serif;
+  line-height:1.1;letter-spacing:-.5px;max-width:620px;margin-bottom:14px;
+}
+.slide-cite{font-size:9px;letter-spacing:.12em;text-transform:uppercase;}
+
+/* media */
+.slide-media-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;height:100%;}
+.slide-fake-img{
+  height:280px;border:2px solid;
+  background:repeating-linear-gradient(45deg,#111 0,#111 8px,#161616 8px,#161616 16px);
+}
+
+/* closing */
+.slide-closing{text-align:center;align-items:center;}
+
+/* px grid deco */
+.px-deco{position:absolute;bottom:28px;right:28px;display:grid;grid-template-columns:repeat(4,18px);gap:2px;z-index:3;}
+.px-deco div{width:18px;height:18px;}
+
+/* ── EDITABLE ELEMENTS ── */
+[contenteditable]{outline:none;cursor:text;}
+[contenteditable]:focus{box-shadow:0 0 0 1px var(--lime);}
+
+/* ── SIDEBAR RIGHT — properties ── */
+#sidebar-right{
+  background:var(--panel);
+  border-left:2px solid var(--border);
+  overflow-y:auto;padding:0;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+#sidebar-right::-webkit-scrollbar{width:4px;}
+#sidebar-right::-webkit-scrollbar-thumb{background:var(--border);}
+
+.panel-section{border-bottom:1px solid var(--border);padding:14px;}
+.panel-label{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.panel-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.panel-row label{font-size:10px;color:#666;min-width:70px;}
+
+.p-input{
+  flex:1;background:#1a1a1a;border:1.5px solid var(--border);
+  color:var(--white);font-family:'Space Mono',monospace;font-size:11px;
+  padding:5px 8px;outline:none;
+}
+.p-input:focus{border-color:var(--lime);}
+
+.p-select{
+  flex:1;background:#1a1a1a;border:1.5px solid var(--border);
+  color:var(--white);font-family:'Space Mono',monospace;font-size:10px;
+  padding:5px 8px;outline:none;cursor:pointer;
+}
+
+.p-color{
+  width:32px;height:28px;border:1.5px solid var(--border);
+  padding:1px;background:none;cursor:pointer;
+}
+
+.layout-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.layout-btn{
+  background:#1a1a1a;border:1.5px solid var(--border);
+  color:#666;font-size:9px;font-family:'Space Mono',monospace;
+  padding:8px 4px;cursor:pointer;text-align:center;
+  transition:border-color .15s,color .15s;
+  text-transform:uppercase;letter-spacing:.05em;
+}
+.layout-btn:hover{border-color:var(--muted);color:var(--white);}
+.layout-btn.active{border-color:var(--lime);color:var(--lime);}
+
+.color-row{display:flex;gap:6px;flex-wrap:wrap;}
+.color-swatch{
+  width:28px;height:28px;border:2px solid transparent;cursor:pointer;
+  transition:border-color .15s;flex-shrink:0;
+}
+.color-swatch:hover,.color-swatch.active{border-color:var(--white);}
+
+.font-size-row{display:flex;gap:4px;}
+.fs-btn{
+  background:#1a1a1a;border:1.5px solid var(--border);
+  color:#666;font-size:10px;font-family:'Space Mono',monospace;
+  padding:4px 8px;cursor:pointer;
+  transition:border-color .15s,color .15s;
+}
+.fs-btn:hover{border-color:var(--muted);color:var(--white);}
+
+/* ── PRESENTATION MODE ── */
+#pres-mode{
+  display:none;position:fixed;inset:0;
+  background:var(--black);z-index:99999;
+  flex-direction:column;align-items:center;justify-content:center;
+}
+#pres-mode.active{display:flex;}
+#pres-slide{width:100%;max-width:1200px;aspect-ratio:16/9;position:relative;overflow:hidden;}
+#pres-nav{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  display:flex;gap:0;background:var(--black);border:2px solid #222;padding:8px 14px;
+}
+.pres-dot{width:10px;height:10px;border:0;background:#2a2a2a;cursor:pointer;padding:0;margin:0 4px;transition:width .3s,background .2s;clip-path:polygon(8% 0%,92% 0%,100% 100%,0% 100%);}
+.pres-dot.active{width:28px;background:var(--lime);}
+#pres-close{position:fixed;top:16px;right:20px;background:var(--pink);border:none;color:white;font-family:'Space Mono',monospace;font-size:11px;padding:8px 16px;cursor:pointer;letter-spacing:.1em;}
+#pres-counter{position:fixed;bottom:24px;right:24px;font-family:'Space Mono',monospace;font-size:10px;color:#333;letter-spacing:.1em;}
+
+/* ── TOAST ── */
+#toast{
+  position:fixed;bottom:60px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--lime);color:var(--black);
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+  padding:8px 20px;letter-spacing:.1em;text-transform:uppercase;
+  opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;z-index:99998;
+  border:2px solid var(--black);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+<!-- TOPBAR -->
+<header id="topbar">
+  <div class="logo">S<em>POWER</em></div>
+
+  <div class="tb-group">
+    <button class="tb-btn" onclick="addSlide()">
+      <svg width="12" height="12" viewBox="0 0 12 12"><line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="2"/><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="2"/></svg>
+      Slide
+    </button>
+    <button class="tb-btn" onclick="duplicateSlide()">
+      <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="3" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M3 3V2a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1h-1" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+      Duplicar
+    </button>
+    <button class="tb-btn" onclick="deleteCurrentSlide()">
+      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M5 3V2h2v1M4.5 3l.5 7M7.5 3l-.5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Borrar
+    </button>
+  </div>
+
+  <div class="tb-group">
+    <button class="tb-btn" onclick="moveSlide(-1)">← Mover</button>
+    <button class="tb-btn" onclick="moveSlide(1)">Mover →</button>
+  </div>
+
+  <div class="tb-group">
+    <button class="tb-btn" onclick="exportPDF()">
+      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 1h6l2 2v8H2V1z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 1v3h3" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M4 7h4M4 9h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      PDF
+    </button>
+    <button class="tb-btn" onclick="exportJSON()">JSON</button>
+    <button class="tb-btn" onclick="importJSON()">Importar</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="loadJSON(event)">
+  </div>
+
+  <div class="tb-spacer"></div>
+  <div class="tb-title" id="pres-title-display">Sin título</div>
+  <div class="tb-spacer"></div>
+
+  <button class="tb-btn accent" onclick="startPresentation()">
+    <svg width="12" height="12" viewBox="0 0 12 12"><polygon points="2,1 11,6 2,11" fill="currentColor"/></svg>
+    PRESENTAR
+  </button>
+</header>
+
+<!-- SIDEBAR LEFT -->
+<aside id="sidebar-left">
+  <div class="slide-list-header">
+    <span>SLIDES</span>
+    <span id="slide-count">0</span>
+  </div>
+  <div id="slide-list"></div>
+</aside>
+
+<!-- CANVAS -->
+<main id="canvas-area">
+  <div class="canvas-label">EDITOR — doble clic para editar texto</div>
+  <div id="slide-canvas"></div>
+</main>
+
+<!-- SIDEBAR RIGHT -->
+<aside id="sidebar-right">
+
+  <div class="panel-section">
+    <div class="panel-label">Título presentación</div>
+    <input class="p-input" style="width:100%" id="pres-title-input" placeholder="Mi presentación..." oninput="updateTitle(this.value)">
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Layout</div>
+    <div class="layout-grid">
+      <button class="layout-btn" onclick="setLayout('frontpage')">Portada</button>
+      <button class="layout-btn" onclick="setLayout('bullets')">Bullets</button>
+      <button class="layout-btn" onclick="setLayout('text')">Texto</button>
+      <button class="layout-btn" onclick="setLayout('quote')">Cita</button>
+      <button class="layout-btn" onclick="setLayout('media')">Media</button>
+      <button class="layout-btn" onclick="setLayout('closing')">Final</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Color de fondo</div>
+    <div class="color-row" id="bg-swatches">
+      <div class="color-swatch" style="background:#0A0A0A" data-color="#0A0A0A" onclick="setBg(this)"></div>
+      <div class="color-swatch" style="background:#C8FF00" data-color="#C8FF00" onclick="setBg(this)"></div>
+      <div class="color-swatch" style="background:#FF2D78" data-color="#FF2D78" onclick="setBg(this)"></div>
+      <div class="color-swatch" style="background:#00F5FF" data-color="#00F5FF" onclick="setBg(this)"></div>
+      <div class="color-swatch" style="background:#9B00FF" data-color="#9B00FF" onclick="setBg(this)"></div>
+      <div class="color-swatch" style="background:#FF6B00" data-color="#FF6B00" onclick="setBg(this)"></div>
+      <div class="color-swatch" style="background:#FFFFFF" data-color="#FFFFFF" onclick="setBg(this)"></div>
+      <div class="color-swatch" style="background:#1a1a2e" data-color="#1a1a2e" onclick="setBg(this)"></div>
+    </div>
+    <div class="panel-row" style="margin-top:8px;">
+      <label>Custom</label>
+      <input type="color" class="p-color" id="bg-custom" onchange="setBgCustom(this.value)">
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Color acento</div>
+    <div class="color-row" id="accent-swatches">
+      <div class="color-swatch" style="background:#C8FF00" data-color="#C8FF00" onclick="setAccent(this)"></div>
+      <div class="color-swatch" style="background:#FF2D78" data-color="#FF2D78" onclick="setAccent(this)"></div>
+      <div class="color-swatch" style="background:#00F5FF" data-color="#00F5FF" onclick="setAccent(this)"></div>
+      <div class="color-swatch" style="background:#9B00FF" data-color="#9B00FF" onclick="setAccent(this)"></div>
+      <div class="color-swatch" style="background:#FF6B00" data-color="#FF6B00" onclick="setAccent(this)"></div>
+      <div class="color-swatch" style="background:#FFFFFF" data-color="#FFFFFF" onclick="setAccent(this)"></div>
+    </div>
+    <div class="panel-row" style="margin-top:8px;">
+      <label>Custom</label>
+      <input type="color" class="p-color" id="accent-custom" onchange="setAccentCustom(this.value)">
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Color texto</div>
+    <div class="color-row" id="text-swatches">
+      <div class="color-swatch" style="background:#F0F0F0" data-color="#F0F0F0" onclick="setTextColor(this)"></div>
+      <div class="color-swatch" style="background:#0A0A0A" data-color="#0A0A0A" onclick="setTextColor(this)"></div>
+      <div class="color-swatch" style="background:#C8FF00" data-color="#C8FF00" onclick="setTextColor(this)"></div>
+      <div class="color-swatch" style="background:#FF2D78" data-color="#FF2D78" onclick="setTextColor(this)"></div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Imagen de fondo</div>
+    <div class="panel-row">
+      <input type="file" id="bg-img-input" accept="image/*" style="display:none" onchange="setBgImage(event)">
+      <button class="layout-btn" style="flex:1" onclick="document.getElementById('bg-img-input').click()">Subir imagen</button>
+      <button class="layout-btn" onclick="clearBgImage()">Quitar</button>
+    </div>
+    <div class="panel-row">
+      <label>Opacidad</label>
+      <input type="range" min="0" max="100" value="100" id="bg-opacity" style="flex:1" oninput="setBgOpacity(this.value)">
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Grid overlay</div>
+    <div class="panel-row">
+      <label>Mostrar</label>
+      <input type="checkbox" id="show-grid" checked onchange="toggleGrid(this.checked)">
+    </div>
+  </div>
+
+</aside>
+
+</div><!-- #app -->
+
+<!-- PRESENTATION MODE -->
+<div id="pres-mode">
+  <div id="pres-slide"></div>
+  <div id="pres-nav"></div>
+  <div id="pres-counter"></div>
+  <button id="pres-close" onclick="endPresentation()">✕ ESC</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let slides = [];
+let current = 0;
+let presIndex = 0;
+let presMode = false;
+
+const COLORS = ['#C8FF00','#FF2D78','#00F5FF','#9B00FF','#FF6B00','#0A0A0A','#0A0A0A','#111'];
+
+function defaultSlide(layout='frontpage'){
+  const accent = '#C8FF00';
+  const bg = '#0A0A0A';
+  const tc = '#F0F0F0';
+  const data = {
+    frontpage:{ kicker:'Presentación', title:'Título principal', subtitle:'Subtítulo de la presentación' },
+    bullets:{ kicker:'Puntos clave', title:'Ideas principales', items:['Primera idea','Segunda idea','Tercera idea'] },
+    text:{ kicker:'Contenido', title:'Diapositiva de texto', body:'Escribe aquí el contenido principal de esta diapositiva.' },
+    quote:{ quote:'Una buena presentación guía la atención.', cite:'— Autor' },
+    media:{ kicker:'Media', title:'Título', body:'Texto de apoyo para el recurso visual.' },
+    closing:{ title:'GRACIAS', subtitle:'Contacto o mensaje final' },
+  };
+  return { layout, bg, accent, textColor:tc, showGrid:true, bgImage:null, bgOpacity:100, data:data[layout]||data.frontpage };
+}
+
+// ═══════════════════════════════════════════
+// RENDER SLIDE HTML
+// ═══════════════════════════════════════════
+function renderSlideHTML(slide, editable=false){
+  const {layout,bg,accent,textColor,showGrid,bgImage,bgOpacity,data} = slide;
+  const ed = editable ? 'contenteditable="true" spellcheck="false"' : '';
+  const gridHTML = showGrid ? '<div class="slide-grid-overlay"></div>' : '';
+  const bgImgStyle = bgImage ? `background-image:url(${bgImage});background-size:cover;background-position:center;opacity:${bgOpacity/100};` : '';
+  const bgLayer = bgImage ? `<div class="slide-bg" style="${bgImgStyle}"></div>` : '';
+
+  const pxColors = [accent,'#FF2D78','#00F5FF','#0A0A0A','#0A0A0A','#111','#111'];
+  let pxGrid = '<div class="px-deco">';
+  for(let i=0;i<16;i++){
+    const c = Math.random()>.55 ? pxColors[Math.floor(Math.random()*pxColors.length)] : '#161616';
+    pxGrid += `<div style="background:${c}"></div>`;
+  }
+  pxGrid += '</div>';
+
+  let inner = '';
+
+  if(layout==='frontpage'){
+    inner = `
+      <div class="slide-content">
+        <div class="slide-kicker" style="color:${accent}" data-field="kicker" ${ed}>${data.kicker||'Kicker'}</div>
+        <div class="slide-h1" style="color:${textColor};font-size:54px;" data-field="title" ${ed}>${data.title||'Título'}</div>
+        <div class="slide-divider" style="background:${accent}"></div>
+        <div class="slide-p" style="border-left:3px solid ${accent};padding-left:12px;color:#888;" data-field="subtitle" ${ed}>${data.subtitle||'Subtítulo'}</div>
+      </div>
+      ${pxGrid}`;
+  } else if(layout==='bullets'){
+    const items = data.items||['Item 1'];
+    inner = `
+      <div class="slide-content">
+        <div class="slide-kicker" style="color:${accent}" data-field="kicker" ${ed}>${data.kicker||'Kicker'}</div>
+        <div class="slide-h2" style="color:${textColor};font-size:36px;" data-field="title" ${ed}>${data.title||'Título'}</div>
+        <div class="slide-divider" style="background:${accent}"></div>
+        <ul class="slide-ul" id="bullets-list">
+          ${items.map((it,i)=>`<li style="color:${textColor};border-color:#2a2a2a;" data-field="item${i}" ${ed}>${it}</li>`).join('')}
+        </ul>
+      </div>`;
+  } else if(layout==='text'){
+    inner = `
+      <div class="slide-content">
+        <div class="slide-box" style="background:rgba(0,0,0,.4);border:2px solid #222;padding:36px;max-width:580px;position:relative;">
+          <div style="position:absolute;top:5px;left:5px;width:100%;height:100%;border:2px solid ${accent};z-index:-1;pointer-events:none;"></div>
+          <div class="slide-kicker" style="color:${accent}" data-field="kicker" ${ed}>${data.kicker||'Kicker'}</div>
+          <div class="slide-h2" style="color:${textColor};font-size:32px;" data-field="title" ${ed}>${data.title||'Título'}</div>
+          <div class="slide-p" style="color:#888;" data-field="body" ${ed}>${data.body||'Contenido...'}</div>
+        </div>
+      </div>`;
+  } else if(layout==='quote'){
+    inner = `
+      <div class="slide-content" style="justify-content:center;">
+        <div class="slide-quote-mark" style="color:${accent};">❝</div>
+        <div class="slide-blockquote" style="color:${textColor};font-size:38px;" data-field="quote" ${ed}>${data.quote||'Cita aquí'}</div>
+        <div class="slide-cite" style="color:#555;" data-field="cite" ${ed}>${data.cite||'— Autor'}</div>
+      </div>`;
+  } else if(layout==='media'){
+    inner = `
+      <div class="slide-content" style="padding:40px 48px;">
+        <div class="slide-media-grid">
+          <div>
+            <div class="slide-kicker" style="color:${accent}" data-field="kicker" ${ed}>${data.kicker||'Media'}</div>
+            <div class="slide-h2" style="color:${textColor};font-size:32px;" data-field="title" ${ed}>${data.title||'Título'}</div>
+            <div class="slide-divider" style="background:${accent}"></div>
+            <div class="slide-p" style="color:#888;" data-field="body" ${ed}>${data.body||'Texto de apoyo'}</div>
+          </div>
+          <div class="slide-fake-img" style="border-color:${accent};"></div>
+        </div>
+      </div>`;
+  } else if(layout==='closing'){
+    inner = `
+      <div class="slide-content slide-closing">
+        <div class="slide-kicker" style="color:${accent};justify-content:center;" data-field="kicker" ${ed}>${data.kicker||'Fin'}</div>
+        <div class="slide-h1" style="-webkit-text-stroke:2px ${accent};color:transparent;font-size:72px;" data-field="title" ${ed}>${data.title||'GRACIAS'}</div>
+        <div class="slide-divider" style="background:${accent};margin:0 auto 14px;"></div>
+        <div class="slide-p" style="color:#555;text-align:center;" data-field="subtitle" ${ed}>${data.subtitle||'Subtítulo'}</div>
+      </div>
+      ${pxGrid}`;
+  }
+
+  return `<div style="background:${bg};width:100%;height:100%;position:relative;overflow:hidden;">${bgLayer}${gridHTML}${inner}</div>`;
+}
+
+// ═══════════════════════════════════════════
+// DOM HELPERS
+// ═══════════════════════════════════════════
+function getCanvas(){ return document.getElementById('slide-canvas'); }
+
+function renderCurrent(){
+  if(!slides.length) return;
+  const slide = slides[current];
+  const canvas = getCanvas();
+  canvas.innerHTML = renderSlideHTML(slide, true);
+  // attach input listeners to editable fields
+  canvas.querySelectorAll('[contenteditable]').forEach(el=>{
+    el.addEventListener('input', ()=>{ syncDataFromDOM(); renderThumb(current); });
+  });
+  updateLayoutBtns();
+  updatePanelFromSlide();
+}
+
+function syncDataFromDOM(){
+  if(!slides.length) return;
+  const canvas = getCanvas();
+  const slide = slides[current];
+  canvas.querySelectorAll('[data-field]').forEach(el=>{
+    const f = el.dataset.field;
+    if(f.startsWith('item')){
+      const i = parseInt(f.replace('item',''));
+      if(!slide.data.items) slide.data.items=[];
+      slide.data.items[i] = el.innerText;
+    } else {
+      slide.data[f] = el.innerText;
+    }
+  });
+}
+
+function renderThumb(index){
+  const thumbs = document.querySelectorAll('.slide-thumb');
+  if(!thumbs[index]) return;
+  const slide = slides[index];
+  const inner = thumbs[index].querySelector('.slide-thumb-inner');
+  // color bg
+  inner.style.background = slide.bg;
+  const title = slide.data.title || slide.data.quote || '';
+  const sub = slide.data.subtitle || slide.data.kicker || slide.layout;
+  inner.querySelector('.slide-thumb-title').style.color = slide.textColor;
+  inner.querySelector('.slide-thumb-title').textContent = title;
+  inner.querySelector('.slide-thumb-sub').style.color = slide.accent;
+  inner.querySelector('.slide-thumb-sub').textContent = sub;
+}
+
+function renderAllThumbs(){
+  slides.forEach((_,i)=>renderThumb(i));
+}
+
+function buildSidebar(){
+  const list = document.getElementById('slide-list');
+  list.innerHTML='';
+  slides.forEach((slide,i)=>{
+    const div = document.createElement('div');
+    div.className='slide-thumb'+(i===current?' active':'');
+    div.innerHTML=`
+      <div class="slide-thumb-inner" style="background:${slide.bg}">
+        <div class="slide-thumb-title" style="color:${slide.textColor}"></div>
+        <div class="slide-thumb-sub" style="color:${slide.accent}"></div>
+        <div class="slide-thumb-num">${i+1}</div>
+      </div>
+      <button class="del-btn" onclick="deleteSlide(${i},event)">✕</button>`;
+    div.addEventListener('click',()=>goTo(i));
+    list.appendChild(div);
+    renderThumb(i);
+  });
+  document.getElementById('slide-count').textContent = slides.length;
+}
+
+function goTo(index){
+  syncDataFromDOM();
+  current = Math.max(0,Math.min(index, slides.length-1));
+  buildSidebar();
+  renderCurrent();
+  scrollThumbIntoView(current);
+}
+
+function scrollThumbIntoView(i){
+  const thumbs = document.querySelectorAll('.slide-thumb');
+  if(thumbs[i]) thumbs[i].scrollIntoView({block:'nearest'});
+}
+
+// ═══════════════════════════════════════════
+// SLIDE MANAGEMENT
+// ═══════════════════════════════════════════
+function addSlide(layout='frontpage'){
+  syncDataFromDOM();
+  const s = defaultSlide(layout);
+  // inherit colors from current
+  if(slides.length){ s.bg=slides[current].bg; s.accent=slides[current].accent; s.textColor=slides[current].textColor; }
+  slides.splice(current+1,0,s);
+  current++;
+  buildSidebar();
+  renderCurrent();
+  toast('Slide añadido');
+}
+
+function duplicateSlide(){
+  syncDataFromDOM();
+  const copy = JSON.parse(JSON.stringify(slides[current]));
+  slides.splice(current+1,0,copy);
+  current++;
+  buildSidebar();
+  renderCurrent();
+  toast('Slide duplicado');
+}
+
+function deleteSlide(index,event){
+  event.stopPropagation();
+  if(slides.length<=1){ toast('No puedes borrar el único slide'); return; }
+  slides.splice(index,1);
+  if(current>=slides.length) current=slides.length-1;
+  buildSidebar();
+  renderCurrent();
+  toast('Slide eliminado');
+}
+
+function deleteCurrentSlide(){ deleteSlide(current,{stopPropagation:()=>{}}); }
+
+function moveSlide(dir){
+  syncDataFromDOM();
+  const target = current+dir;
+  if(target<0||target>=slides.length) return;
+  [slides[current],slides[target]] = [slides[target],slides[current]];
+  current=target;
+  buildSidebar();
+  renderCurrent();
+}
+
+// ═══════════════════════════════════════════
+// LAYOUT & STYLE
+// ═══════════════════════════════════════════
+function setLayout(layout){
+  syncDataFromDOM();
+  slides[current].layout = layout;
+  slides[current].data = defaultSlide(layout).data;
+  renderCurrent();
+  renderThumb(current);
+  updateLayoutBtns();
+}
+
+function setBg(el){
+  const c = el.dataset.color;
+  slides[current].bg = c;
+  document.querySelectorAll('#bg-swatches .color-swatch').forEach(s=>s.classList.toggle('active',s===el));
+  renderCurrent(); renderThumb(current);
+}
+function setBgCustom(c){ slides[current].bg=c; renderCurrent(); renderThumb(current); }
+
+function setAccent(el){
+  const c = el.dataset.color;
+  slides[current].accent = c;
+  document.querySelectorAll('#accent-swatches .color-swatch').forEach(s=>s.classList.toggle('active',s===el));
+  renderCurrent(); renderThumb(current);
+}
+function setAccentCustom(c){ slides[current].accent=c; renderCurrent(); renderThumb(current); }
+
+function setTextColor(el){
+  const c = el.dataset.color;
+  slides[current].textColor = c;
+  document.querySelectorAll('#text-swatches .color-swatch').forEach(s=>s.classList.toggle('active',s===el));
+  renderCurrent(); renderThumb(current);
+}
+
+function setBgImage(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { slides[current].bgImage=e.target.result; renderCurrent(); renderThumb(current); };
+  reader.readAsDataURL(file);
+}
+function clearBgImage(){ slides[current].bgImage=null; renderCurrent(); renderThumb(current); }
+
+function setBgOpacity(v){ slides[current].bgOpacity=parseInt(v); renderCurrent(); }
+
+function toggleGrid(v){ slides[current].showGrid=v; renderCurrent(); }
+
+function updateLayoutBtns(){
+  document.querySelectorAll('.layout-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.getAttribute('onclick').includes(slides[current].layout));
+  });
+}
+
+function updatePanelFromSlide(){
+  const s = slides[current];
+  document.getElementById('show-grid').checked = s.showGrid;
+  document.getElementById('bg-opacity').value = s.bgOpacity||100;
+}
+
+function updateTitle(v){
+  document.getElementById('pres-title-display').textContent = v||'Sin título';
+}
+
+// ═══════════════════════════════════════════
+// KEYBOARD NAV (editor)
+// ═══════════════════════════════════════════
+document.addEventListener('keydown', e=>{
+  if(presMode) return;
+  if(document.activeElement && document.activeElement.isContentEditable) return;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') goTo(current+1);
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp') goTo(current-1);
+});
+
+// ═══════════════════════════════════════════
+// PRESENTATION MODE
+// ═══════════════════════════════════════════
+function startPresentation(){
+  syncDataFromDOM();
+  presMode=true;
+  presIndex=current;
+  const pm = document.getElementById('pres-mode');
+  pm.classList.add('active');
+  buildPresNav();
+  renderPresSlide();
+  document.addEventListener('keydown', presKeyHandler);
+}
+
+function endPresentation(){
+  presMode=false;
+  document.getElementById('pres-mode').classList.remove('active');
+  document.removeEventListener('keydown', presKeyHandler);
+}
+
+function presKeyHandler(e){
+  if(e.key==='Escape') endPresentation();
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') presGo(presIndex+1);
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp') presGo(presIndex-1);
+}
+
+function buildPresNav(){
+  const nav = document.getElementById('pres-nav');
+  nav.innerHTML='';
+  slides.forEach((_,i)=>{
+    const btn=document.createElement('button');
+    btn.className='pres-dot'+(i===presIndex?' active':'');
+    btn.onclick=()=>presGo(i);
+    nav.appendChild(btn);
+  });
+}
+
+function renderPresSlide(){
+  const ps = document.getElementById('pres-slide');
+  ps.innerHTML = renderSlideHTML(slides[presIndex], false);
+  // scale to fill screen
+  const ratio = Math.min(window.innerWidth/800, window.innerHeight/450);
+  ps.style.transform = `scale(${ratio})`;
+  ps.style.transformOrigin = 'center center';
+  ps.style.width = '800px';
+  ps.style.height = '450px';
+
+  document.getElementById('pres-counter').textContent =
+    (presIndex+1<10?'0':'')+(presIndex+1)+' / '+(slides.length<10?'0':'')+slides.length;
+
+  document.querySelectorAll('.pres-dot').forEach((d,i)=>d.classList.toggle('active',i===presIndex));
+}
+
+function presGo(i){
+  presIndex = Math.max(0,Math.min(i,slides.length-1));
+  renderPresSlide();
+  buildPresNav();
+}
+
+window.addEventListener('resize',()=>{ if(presMode) renderPresSlide(); });
+
+// ═══════════════════════════════════════════
+// EXPORT / IMPORT
+// ═══════════════════════════════════════════
+function exportJSON(){
+  syncDataFromDOM();
+  const title = document.getElementById('pres-title-input').value || 'spower';
+  const json = JSON.stringify({title, slides}, null, 2);
+  const blob = new Blob([json],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=title.replace(/\s+/g,'_')+'.json';
+  a.click();
+  toast('JSON exportado');
+}
+
+function importJSON(){ document.getElementById('import-file').click(); }
+
+function loadJSON(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      if(data.title) document.getElementById('pres-title-input').value=data.title;
+      updateTitle(data.title||'');
+      slides = data.slides||[];
+      current=0;
+      buildSidebar();
+      renderCurrent();
+      toast('Presentación cargada');
+    } catch(err){ toast('Error al cargar JSON'); }
+  };
+  reader.readAsText(file);
+}
+
+async function exportPDF(){
+  syncDataFromDOM();
+  toast('Generando PDF...');
+  const title = document.getElementById('pres-title-input').value || 'spower';
+  // Use html2canvas to capture each slide
+  const tempDiv = document.createElement('div');
+  tempDiv.style.cssText='position:fixed;top:-9999px;left:-9999px;width:800px;height:450px;overflow:hidden;';
+  document.body.appendChild(tempDiv);
+
+  // Build simple PDF-like HTML with all slides as images
+  const imgs = [];
+  for(let i=0;i<slides.length;i++){
+    tempDiv.innerHTML = renderSlideHTML(slides[i], false);
+    await new Promise(r=>setTimeout(r,80));
+    try{
+      const canvas = await html2canvas(tempDiv,{width:800,height:450,scale:1.5,useCORS:true,logging:false});
+      imgs.push(canvas.toDataURL('image/jpeg',0.92));
+    } catch(e){ imgs.push(''); }
+  }
+  document.body.removeChild(tempDiv);
+
+  // Build printable HTML
+  let html = `<!doctype html><html><head><meta charset="UTF-8"><title>${title}</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#000;}
+  .page{width:100%;page-break-after:always;display:flex;align-items:center;justify-content:center;min-height:100vh;}
+  img{width:100%;display:block;}
+  @media print{.page{min-height:auto;page-break-after:always;}}</style></head><body>`;
+  imgs.forEach(src=>{ if(src) html+=`<div class="page"><img src="${src}"></div>`; });
+  html+='</body></html>';
+
+  const blob = new Blob([html],{type:'text/html'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=title.replace(/\s+/g,'_')+'.html';
+  a.click();
+  toast('Exportado — abre el HTML y usa Ctrl+P para PDF');
+}
+
+// ═══════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+function init(){
+  slides=[
+    defaultSlide('frontpage'),
+    defaultSlide('bullets'),
+    defaultSlide('text'),
+    defaultSlide('quote'),
+    defaultSlide('media'),
+    defaultSlide('closing'),
+  ];
+  current=0;
+  buildSidebar();
+  renderCurrent();
+}
+
+init();
+</script>
+</body>
+</html>
